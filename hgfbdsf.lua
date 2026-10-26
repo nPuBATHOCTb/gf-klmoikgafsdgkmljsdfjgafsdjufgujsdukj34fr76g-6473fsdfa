@@ -68,6 +68,10 @@ local Cfg = {
     GhostMode = false,
     OOFArrowsEnabled = false, OOFArrowSize = 12, OOFArrowRadius = 160, OOFArrowColor = Color3.fromRGB(255, 255, 255), OOFArrowThickness = 2, OOFArrowOutline = true,
     Key_Menu = Enum.KeyCode.RightShift, Key_Aimbot = Enum.KeyCode.E, Key_Fly = Enum.KeyCode.F,
+    WorldOutlineEnabled = false, WorldOutlineColor = Color3.fromRGB(255, 255, 255), WorldOutlineTransparency = 0.5, WorldFillTransparency = 0.9, WorldPulseEnabled = false, WorldPulseSpeed = 2,
+    SkyboxEnabled = false, SkyboxId = "rbxassetid://136565752",
+    AmbientEnabled = false, AmbientColor = Color3.fromRGB(255, 255, 255),
+    WeaponChamsEnabled = false, WeaponChamsColor = Color3.fromRGB(255, 0, 255),
     API_KEY = "sk-69fff251262b496fb7895ac75b89362a"
 }
 
@@ -109,11 +113,12 @@ end
 LoadConfig()
 
 local State = { 
-    FlyBV = nil, SpinPhase = 0, ShakeTick = 0, LastShot = 0, FPS = 60, Ping = 0,
+    FlyBV = nil, FlyAttachment = nil, FlyTrail = nil, FlyAttachments = nil, SpinPhase = 0, ShakeTick = 0, LastShot = 0, FPS = 60, Ping = 0,
     Drawings = {}, SelfHL = nil, ChinaHatPart = nil, HaloPart = nil, ChamsPulse = 0, ActiveColorCallback = nil,
     CrosshairLines = {}, CrosshairOutline = {}, CrosshairGlowLines = {}, FOVCircleDraw = nil,
     LastFakeLagTime = 0, SavedCFrame = nil, OriginalNeckC0 = nil,
-    GhostModel = nil, OOFArrows = {}, BloomObj = nil, BlurObj = nil, ColorCorrObj = nil, SunRaysObj = nil, DoFObj = nil
+    GhostModel = nil, OOFArrows = {}, BloomObj = nil, BlurObj = nil, ColorCorrObj = nil, SunRaysObj = nil, DoFObj = nil, CrosshairWindow = nil,
+    WorldHighlight = nil, WorldPulseTick = 0, SkyboxObj = nil, WeaponChams = {}
 }
 
 local gui = new("ScreenGui", { Name = "NeverCrackUI", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = PARENT })
@@ -414,6 +419,8 @@ createToggle(pVisuals, "halo", function() return Cfg.Halo end, function(v) Cfg.H
 addSection(pVisuals, "chams enemy")
 createToggle(pVisuals, "enable chams", function() return Cfg.ChamsEnabled end, function(v) Cfg.ChamsEnabled = v end)
 createSlider(pVisuals, "chams transparency", 0, 1, function() return Cfg.ChamsTransparency end, function(v) Cfg.ChamsTransparency = v end, true)
+createToggle(pVisuals, "weapon chams", function() return Cfg.WeaponChamsEnabled end, function(v) Cfg.WeaponChamsEnabled = v end)
+createColorPicker(pVisuals, "weapon chams color", function() return Cfg.WeaponChamsColor end, function(v) Cfg.WeaponChamsColor = v end)
 
 addSection(pWorld, "environment")
 createToggle(pWorld, "fullbright", function() return Cfg.Fullbright end, function(v) Cfg.Fullbright = v end)
@@ -444,6 +451,18 @@ createSlider(pWorld, "dof focus", 0, 1, function() return Cfg.DepthOfFieldFocus 
 createSlider(pWorld, "dof far", 0, 1, function() return Cfg.DepthOfFieldFarIntensity end, function(v) Cfg.DepthOfFieldFarIntensity = v end, true)
 createSlider(pWorld, "dof near", 0, 1, function() return Cfg.DepthOfFieldNearIntensity end, function(v) Cfg.DepthOfFieldNearIntensity = v end, true)
 
+addSection(pWorld, "world outline")
+createToggle(pWorld, "enable world outline", function() return Cfg.WorldOutlineEnabled end, function(v) Cfg.WorldOutlineEnabled = v end)
+createSlider(pWorld, "outline transparency", 0, 100, function() return math.floor(Cfg.WorldOutlineTransparency * 100) end, function(v) Cfg.WorldOutlineTransparency = v / 100 end)
+createSlider(pWorld, "fill transparency", 0, 100, function() return math.floor(Cfg.WorldFillTransparency * 100) end, function(v) Cfg.WorldFillTransparency = v / 100 end)
+createToggle(pWorld, "pulse enabled", function() return Cfg.WorldPulseEnabled end, function(v) Cfg.WorldPulseEnabled = v end)
+createSlider(pWorld, "pulse speed", 1, 10, function() return Cfg.WorldPulseSpeed end, function(v) Cfg.WorldPulseSpeed = v end)
+
+addSection(pWorld, "skybox & ambient")
+createToggle(pWorld, "skybox enabled", function() return Cfg.SkyboxEnabled end, function(v) Cfg.SkyboxEnabled = v end)
+createToggle(pWorld, "ambient enabled", function() return Cfg.AmbientEnabled end, function(v) Cfg.AmbientEnabled = v end)
+createColorPicker(pWorld, "ambient color", function() return Cfg.AmbientColor end, function(v) Cfg.AmbientColor = v end)
+
 addSection(pWorld, "custom crosshair")
 createToggle(pWorld, "enable crosshair", function() return Cfg.CrosshairEnabled end, function(v) Cfg.CrosshairEnabled = v end)
 createButton(pWorld, "Open Custom Crosshair Menu", function()
@@ -458,12 +477,10 @@ createButton(pWorld, "Open Custom Crosshair Menu", function()
         cClose.MouseButton1Click:Connect(function() State.CrosshairWindow.Visible = false end)
         local cContent = new("ScrollingFrame", { Parent = State.CrosshairWindow, Size = UDim2.new(1, -20, 1, -50), Position = UDim2.fromOffset(10, 45), BackgroundTransparency = 1, BorderSizePixel = 0, CanvasSize = UDim2.new(0,0,0,0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 2, ZIndex = 601 })
         new("UIListLayout", { Parent = cContent, Padding = UDim.new(0, 5), SortOrder = Enum.SortOrder.LayoutOrder })
-        
         local draggingC, dragStartC, startPosC
         cHeader.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingC = true dragStartC = input.Position startPosC = State.CrosshairWindow.Position end end)
         UserInputService.InputChanged:Connect(function(input) if draggingC and input.UserInputType == Enum.UserInputType.MouseMovement then local delta = input.Position - dragStartC State.CrosshairWindow.Position = UDim2.new(startPosC.X.Scale, startPosC.X.Offset + delta.X, startPosC.Y.Scale, startPosC.Y.Offset + delta.Y) end end)
         UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingC = false end end)
-        
         createColorPicker(cContent, "color", function() return Cfg.CrosshairColor end, function(v) Cfg.CrosshairColor = v end)
         createSlider(cContent, "length", 1, 20, function() return Cfg.CrosshairLength end, function(v) Cfg.CrosshairLength = v end)
         createSlider(cContent, "width", 1, 5, function() return Cfg.CrosshairWidth end, function(v) Cfg.CrosshairWidth = v end)
@@ -678,7 +695,7 @@ RunService.RenderStepped:Connect(function(dt)
 
     local cam = Workspace.CurrentCamera
     local centerX, centerY = cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2
-    
+
     State.FOVCircleDraw.Visible = Cfg.FOVCircle
     if Cfg.FOVCircle then
         State.FOVCircleDraw.Position = Vector2.new(centerX, centerY)
@@ -691,12 +708,11 @@ RunService.RenderStepped:Connect(function(dt)
 
     CrosshairAngle += Cfg.CrosshairRotSpeed * dt
     local rad = math.rad(CrosshairAngle)
+    local screenW, screenH = cam.ViewportSize.X, cam.ViewportSize.Y
     for i = 1, 4 do
         local line, outline, glow = State.CrosshairLines[i], State.CrosshairOutline[i], State.CrosshairGlowLines[i]
-        line.Visible = Cfg.CrosshairEnabled
-        outline.Visible = Cfg.CrosshairEnabled and Cfg.CrosshairOutline
-        glow.Visible = Cfg.CrosshairEnabled and Cfg.CrosshairGlow
-        if Cfg.CrosshairEnabled then
+        local isVisible = Cfg.CrosshairEnabled
+        if isVisible then
             local angleOffset = math.rad((i - 1) * 90) + rad
             local x = math.cos(angleOffset) * Cfg.CrosshairLength
             local y = math.sin(angleOffset) * Cfg.CrosshairLength
@@ -704,25 +720,39 @@ RunService.RenderStepped:Connect(function(dt)
             local gapY = math.sin(angleOffset) * Cfg.CrosshairGap
             local from = Vector2.new(centerX + gapX, centerY + gapY)
             local to = Vector2.new(centerX + gapX + x, centerY + gapY + y)
-            line.From = from
-            line.To = to
-            line.Color = Cfg.CrosshairColor
-            line.Thickness = Cfg.CrosshairWidth
-            line.Transparency = 1
-            if Cfg.CrosshairOutline then
-                outline.From = from
-                outline.To = to
-                outline.Color = Color3.new(0, 0, 0)
-                outline.Thickness = Cfg.CrosshairWidth + 2
-                outline.Transparency = 1
+            
+            if from.X > 0 and from.X < screenW and from.Y > 0 and from.Y < screenH and to.X > 0 and to.X < screenW and to.Y > 0 and to.Y < screenH then
+                line.Visible = true
+                line.From = from
+                line.To = to
+                line.Color = Cfg.CrosshairColor
+                line.Thickness = Cfg.CrosshairWidth
+                line.Transparency = 1
+                if Cfg.CrosshairOutline then
+                    outline.Visible = true
+                    outline.From = from
+                    outline.To = to
+                    outline.Color = Color3.new(0, 0, 0)
+                    outline.Thickness = Cfg.CrosshairWidth + 2
+                    outline.Transparency = 1
+                else outline.Visible = false end
+                if Cfg.CrosshairGlow then
+                    glow.Visible = true
+                    glow.From = from
+                    glow.To = to
+                    glow.Color = Cfg.CrosshairColor
+                    glow.Thickness = Cfg.CrosshairWidth + 4
+                    glow.Transparency = 0.5
+                else glow.Visible = false end
+            else
+                line.Visible = false
+                outline.Visible = false
+                glow.Visible = false
             end
-            if Cfg.CrosshairGlow then
-                glow.From = from
-                glow.To = to
-                glow.Color = Cfg.CrosshairColor
-                glow.Thickness = Cfg.CrosshairWidth + 4
-                glow.Transparency = 0.5
-            end
+        else
+            line.Visible = false
+            outline.Visible = false
+            glow.Visible = false
         end
     end
 
@@ -756,7 +786,7 @@ RunService.RenderStepped:Connect(function(dt)
         local topPos, topOn = cam:WorldToViewportPoint(topWorld)
         local botPos, botOn = cam:WorldToViewportPoint(bottomWorld)
 
-        if not (topOn and botOn) then
+        if not (topOn and botOn) or topPos.Z <= 0 or botPos.Z <= 0 then
             hideBundle(d)
             if Cfg.OOFArrowsEnabled then
                 arrowIdx += 1
@@ -901,6 +931,31 @@ RunService.RenderStepped:Connect(function(dt)
             local hl = char:FindFirstChild("NeverCrackChams")
             if hl then hl:Destroy() end
         end
+
+        if Cfg.WeaponChamsEnabled then
+            local tool = char:FindFirstChildOfClass("Tool")
+            local whl = State.WeaponChams[plr]
+            if tool then
+                if not whl then
+                    whl = Instance.new("Highlight")
+                    whl.Name = "NC_WeaponChams"
+                    whl.Adornee = tool
+                    whl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    whl.Parent = char
+                    State.WeaponChams[plr] = whl
+                end
+                whl.FillColor = Cfg.WeaponChamsColor
+                whl.OutlineColor = Cfg.WeaponChamsColor
+                whl.FillTransparency = 0.5
+                whl.OutlineTransparency = 1
+            elseif whl then
+                whl:Destroy()
+                State.WeaponChams[plr] = nil
+            end
+        elseif State.WeaponChams[plr] then
+            State.WeaponChams[plr]:Destroy()
+            State.WeaponChams[plr] = nil
+        end
     end
 
     for i = arrowIdx + 1, #State.OOFArrows do
@@ -1005,6 +1060,52 @@ RunService.Heartbeat:Connect(function()
         State.DoFObj.FarIntensity = Cfg.DepthOfFieldFarIntensity
         State.DoFObj.NearIntensity = Cfg.DepthOfFieldNearIntensity
     elseif State.DoFObj then State.DoFObj.Enabled = false end
+
+    if Cfg.WorldOutlineEnabled then
+        if not State.WorldHighlight then
+            State.WorldHighlight = Instance.new("Highlight")
+            State.WorldHighlight.Name = "NC_WorldOutline"
+            State.WorldHighlight.Adornee = Workspace
+            State.WorldHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            State.WorldHighlight.Parent = gui
+        end
+        State.WorldHighlight.OutlineColor = Cfg.WorldOutlineColor
+        State.WorldHighlight.OutlineTransparency = Cfg.WorldOutlineTransparency
+        State.WorldHighlight.FillColor = Color3.fromRGB(0, 0, 0)
+        
+        if Cfg.WorldPulseEnabled then
+            State.WorldPulseTick += (1/60) * Cfg.WorldPulseSpeed
+            local pulse = (math.sin(State.WorldPulseTick) * 0.2) + 0.8
+            State.WorldHighlight.FillTransparency = Cfg.WorldFillTransparency * pulse
+            State.WorldHighlight.OutlineTransparency = Cfg.WorldOutlineTransparency * pulse
+        else
+            State.WorldHighlight.FillTransparency = Cfg.WorldFillTransparency
+            State.WorldHighlight.OutlineTransparency = Cfg.WorldOutlineTransparency
+        end
+    elseif State.WorldHighlight then
+        State.WorldHighlight:Destroy()
+        State.WorldHighlight = nil
+    end
+
+    if Cfg.SkyboxEnabled then
+        if not State.SkyboxObj then
+            State.SkyboxObj = Instance.new("Sky")
+            State.SkyboxObj.SkyboxBk = Cfg.SkyboxId
+            State.SkyboxObj.SkyboxDn = Cfg.SkyboxId
+            State.SkyboxObj.SkyboxFt = Cfg.SkyboxId
+            State.SkyboxObj.SkyboxLf = Cfg.SkyboxId
+            State.SkyboxObj.SkyboxRt = Cfg.SkyboxId
+            State.SkyboxObj.SkyboxUp = Cfg.SkyboxId
+            State.SkyboxObj.Parent = Lighting
+        end
+    elseif State.SkyboxObj then
+        State.SkyboxObj:Destroy()
+        State.SkyboxObj = nil
+    end
+
+    if Cfg.AmbientEnabled then
+        Lighting.Ambient = Cfg.AmbientColor
+    end
     
     local hum = GetHum()
     if hum then
@@ -1092,19 +1193,51 @@ RunService.RenderStepped:Connect(function(dt)
 
     if Cfg.FlyEnabled then
         local hrp = GetHRP()
-        if hrp then
-            if not State.FlyBV then State.FlyBV = new("BodyVelocity", { Parent = hrp, MaxForce = Vector3.new(1e5,1e5,1e5) }) end
-            local cam = Workspace.CurrentCamera local move = Vector3.zero
+        local hum = GetHum()
+        if hrp and hum then
+            hum.PlatformStand = true
+            if not State.FlyBV then 
+                State.FlyBV = Instance.new("BodyVelocity", hrp)
+                State.FlyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+                State.FlyBV.P = 1250
+                State.FlyBV.Velocity = Vector3.zero
+                
+                local att0 = Instance.new("Attachment", hrp)
+                local att1 = Instance.new("Attachment", hrp)
+                att0.Position = Vector3.new(0, 1, 0)
+                att1.Position = Vector3.new(0, -1, 0)
+                local trail = Instance.new("Trail", hrp)
+                trail.Attachment0 = att0
+                trail.Attachment1 = att1
+                trail.Lifetime = 1
+                trail.MinLength = 0
+                trail.Color = ColorSequence.new(Theme.Accent, Color3.fromRGB(0, 0, 0))
+                trail.Transparency = NumberSequence.new(0, 1)
+                State.FlyTrail = trail
+                State.FlyAttachments = {att0, att1}
+            end
+            local cam = Workspace.CurrentCamera 
+            local move = Vector3.zero
             if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0,1,0) end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0,1,0) end
-            if move.Magnitude > 0 then move = move.Unit * Cfg.FlySpeed end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += Vector3.new(0, 1, 0) end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move -= Vector3.new(0, 1, 0) end
+            
+            if move.Magnitude > 0 then 
+                move = move.Unit * Cfg.FlySpeed 
+            end
             State.FlyBV.Velocity = move
         end
-    elseif State.FlyBV then State.FlyBV:Destroy() State.FlyBV = nil end
+    elseif State.FlyBV then 
+        State.FlyBV:Destroy() 
+        State.FlyBV = nil 
+        if State.FlyTrail then State.FlyTrail:Destroy() end
+        if State.FlyAttachments then for _, a in ipairs(State.FlyAttachments) do a:Destroy() end end
+        local hum = GetHum()
+        if hum then hum.PlatformStand = false end
+    end
 
     if Cfg.ThirdPerson then local hrp = GetHRP() if hrp then LP.CameraMaxZoomDistance = Cfg.ThirdPersonDist LP.CameraMinZoomDistance = Cfg.ThirdPersonDist end end
     if Cfg.SpinbotEnabled then State.SpinPhase += dt * Cfg.SpinbotSpeed local hrp = GetHRP() if hrp then hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, State.SpinPhase, 0) end end
