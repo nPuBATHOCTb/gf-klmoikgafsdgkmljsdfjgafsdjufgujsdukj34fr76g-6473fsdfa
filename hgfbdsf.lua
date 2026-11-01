@@ -9,6 +9,7 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
 local Stats = game:GetService("Stats")
+local SoundService = game:GetService("SoundService")
 
 local LP = Players.LocalPlayer
 local PARENT = (gethui and gethui()) or game:GetService("CoreGui")
@@ -16,16 +17,16 @@ local Camera = Workspace.CurrentCamera
 local http_request = request or http_request or (syn and syn.request) or (fluxus and fluxus.request)
 
 local Theme = {
-    Background = Color3.fromRGB(8, 8, 8),
-    Panel = Color3.fromRGB(12, 12, 12),
-    Element = Color3.fromRGB(16, 16, 16),
-    Text = Color3.fromRGB(210, 210, 210),
-    DimText = Color3.fromRGB(110, 110, 115),
-    Accent = Color3.fromRGB(255, 255, 255),
-    Red = Color3.fromRGB(255, 60, 60),
-    Green = Color3.fromRGB(60, 255, 120),
+    Background = Color3.fromRGB(15, 8, 5),     
+    Panel = Color3.fromRGB(25, 12, 8),          
+    Element = Color3.fromRGB(40, 18, 10),       
+    Text = Color3.fromRGB(255, 230, 200),       
+    DimText = Color3.fromRGB(180, 120, 80),     
+    Accent = Color3.fromRGB(255, 120, 0),       
+    Red = Color3.fromRGB(200, 30, 0),           
+    Green = Color3.fromRGB(150, 255, 100),    
     White = Color3.fromRGB(255, 255, 255),
-    Shadow = Color3.fromRGB(0, 0, 0)
+    Black = Color3.fromRGB(0, 0, 0)
 }
 
 local function new(class, props)
@@ -69,9 +70,35 @@ local Cfg = {
     OOFArrowsEnabled = false, OOFArrowSize = 12, OOFArrowRadius = 160, OOFArrowColor = Color3.fromRGB(255, 255, 255), OOFArrowThickness = 2, OOFArrowOutline = true,
     Key_Menu = Enum.KeyCode.RightShift, Key_Aimbot = Enum.KeyCode.E, Key_Fly = Enum.KeyCode.F,
     WorldOutlineEnabled = false, WorldOutlineColor = Color3.fromRGB(255, 255, 255), WorldOutlineTransparency = 0.5, WorldFillTransparency = 0.9, WorldPulseEnabled = false, WorldPulseSpeed = 2,
+    WorldPulseColor2 = Color3.fromRGB(255, 0, 255),
     SkyboxEnabled = false, SkyboxId = "rbxassetid://136565752",
     AmbientEnabled = false, AmbientColor = Color3.fromRGB(255, 255, 255),
     WeaponChamsEnabled = false, WeaponChamsColor = Color3.fromRGB(255, 0, 255),
+    WatermarkEnabled = true,
+    Box3DEnabled = false, Box3DColor = Color3.fromRGB(255, 255, 255), Box3DThickness = 1,
+    SkeletonThickness = 1, SkeletonFade = true,
+    ChamsRainbow = false, ChamsPulse = false,
+    DamageIndicator = false, DamageColor = Color3.fromRGB(255, 60, 60),
+    HitMarker = false, HitMarkerColor = Color3.fromRGB(255, 255, 255), HitMarkerSound = false,
+    PlayerList = false, PlayerListX = 15, PlayerListY = 200,
+    SpectatorList = false,
+    RadarEnabled = false, RadarSize = 150, RadarX = 15, RadarY = 500,
+    ViewportESP = false, ViewportColor = Color3.fromRGB(0, 255, 255),
+    SelfChams = false,
+    SelfChamsColor = Color3.fromRGB(255, 255, 255), 
+    SelfChamsPulse = 3, 
+    WeaponChams = false, 
+    WeaponChamsColor = Color3.fromRGB(255, 255, 255), 
+    GlowChams = false, 
+    GlowSelf = false, 
+    GlowColor = Color3.fromRGB(255, 255, 255), 
+    Hitmarker = true, 
+    HitmarkerColor = Color3.fromRGB(255, 255, 255),
+     FlickerEnabled = false,
+    FlickerKey = Enum.KeyCode.C, 
+    FlickerFOV = 250,
+    FlickerPart = "Head",
+    FlickerDelay = 0.05, 
     API_KEY = "sk-69fff251262b496fb7895ac75b89362a"
 }
 
@@ -118,7 +145,10 @@ local State = {
     CrosshairLines = {}, CrosshairOutline = {}, CrosshairGlowLines = {}, FOVCircleDraw = nil,
     LastFakeLagTime = 0, SavedCFrame = nil, OriginalNeckC0 = nil,
     GhostModel = nil, OOFArrows = {}, BloomObj = nil, BlurObj = nil, ColorCorrObj = nil, SunRaysObj = nil, DoFObj = nil, CrosshairWindow = nil,
-    WorldHighlight = nil, WorldPulseTick = 0, SkyboxObj = nil, WeaponChams = {}
+    WorldHighlight = nil, WorldPulseTick = 0, SkyboxObj = nil, WeaponChams = {},
+    Box3DLines = {}, HitMarkers = {}, HitMarkerTime = 0, DamageTexts = {},
+    PlayerListFrame = nil, SpectatorListFrame = nil, RadarFrame = nil, RadarDots = {},
+    ViewportBoxes = {}, ChamsColorState = 0
 }
 
 local gui = new("ScreenGui", { Name = "NeverCrackUI", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = PARENT })
@@ -387,6 +417,11 @@ createSlider(pRage, "hitbox size", 5, 30, function() return Cfg.HitboxSize end, 
 createToggle(pRage, "kill aura", function() return Cfg.KillAuraEnabled end, function(v) Cfg.KillAuraEnabled = v end)
 createSlider(pRage, "aura range", 5, 50, function() return Cfg.KillAuraRange end, function(v) Cfg.KillAuraRange = v end)
 
+addSection(pRage, "flicker")
+createToggle(pRage, "Enable Flicker (Instant Hit)", function() return Cfg.FlickerEnabled end, function(v) Cfg.FlickerEnabled = v end)
+createSlider(pRage, "Flicker FOV", 50, 500, function() return Cfg.FlickerFOV end, function(v) Cfg.FlickerFOV = v end)
+createDropdown(pRage, "Flicker Part", {"Head", "UpperTorso", "LowerTorso"}, "Head", function(v) Cfg.FlickerPart = v end)
+
 addSection(pVisuals, "player esp")
 createToggle(pVisuals, "enable esp", function() return Cfg.ESPEnabled end, function(v) Cfg.ESPEnabled = v end)
 createToggle(pVisuals, "box", function() return Cfg.ESPBox end, function(v) Cfg.ESPBox = v end)
@@ -396,6 +431,43 @@ createToggle(pVisuals, "health", function() return Cfg.ESPHealth end, function(v
 createToggle(pVisuals, "tracers", function() return Cfg.ESPTracers end, function(v) Cfg.ESPTracers = v end)
 createToggle(pVisuals, "skeleton", function() return Cfg.ESPSkeleton end, function(v) Cfg.ESPSkeleton = v end)
 createToggle(pVisuals, "team check", function() return Cfg.ESPTeamCheck end, function(v) Cfg.ESPTeamCheck = v end)
+
+addSection(pVisuals, "3d box esp")
+createToggle(pVisuals, "enable 3d box", function() return Cfg.Box3DEnabled end, function(v) Cfg.Box3DEnabled = v end)
+createSlider(pVisuals, "3d thickness", 1, 5, function() return Cfg.Box3DThickness end, function(v) Cfg.Box3DThickness = v end)
+createColorPicker(pVisuals, "3d box color", function() return Cfg.Box3DColor end, function(v) Cfg.Box3DColor = v end)
+
+addSection(pVisuals, "skeleton")
+createSlider(pVisuals, "skeleton thickness", 1, 5, function() return Cfg.SkeletonThickness end, function(v) Cfg.SkeletonThickness = v end)
+createToggle(pVisuals, "skeleton fade", function() return Cfg.SkeletonFade end, function(v) Cfg.SkeletonFade = v end)
+
+addSection(pVisuals, "chams & effects")
+createToggle(pVisuals, "weaponn chams", function() return Cfg.WeaponChams end, function(v) Cfg.WeaponChams = v end)
+createToggle(pVisuals, "player chams", function() return Cfg.Chams end, function(v) Cfg.Chams = v end)
+createToggle(pVisuals, "hitmarker", function() return Cfg.Hitmarker end, function(v) Cfg.Hitmarker = v end)
+
+addSection(pVisuals, "chams animation")
+createToggle(pVisuals, "rainbow chams", function() return Cfg.ChamsRainbow end, function(v) Cfg.ChamsRainbow = v end)
+createToggle(pVisuals, "pulse chams", function() return Cfg.ChamsPulse end, function(v) Cfg.ChamsPulse = v end)
+
+addSection(pVisuals, "damage & hit")
+createToggle(pVisuals, "damage indicator", function() return Cfg.DamageIndicator end, function(v) Cfg.DamageIndicator = v end)
+createColorPicker(pVisuals, "damage color", function() return Cfg.DamageColor end, function(v) Cfg.DamageColor = v end)
+createToggle(pVisuals, "hit marker", function() return Cfg.HitMarker end, function(v) Cfg.HitMarker = v end)
+createColorPicker(pVisuals, "hit marker color", function() return Cfg.HitMarkerColor end, function(v) Cfg.HitMarkerColor = v end)
+createToggle(pVisuals, "hit marker sound", function() return Cfg.HitMarkerSound end, function(v) Cfg.HitMarkerSound = v end)
+
+addSection(pVisuals, "player & spectator list")
+createToggle(pVisuals, "player list", function() return Cfg.PlayerList end, function(v) Cfg.PlayerList = v end)
+createToggle(pVisuals, "spectator list", function() return Cfg.SpectatorList end, function(v) Cfg.SpectatorList = v end)
+
+addSection(pVisuals, "radar")
+createToggle(pVisuals, "enable radar", function() return Cfg.RadarEnabled end, function(v) Cfg.RadarEnabled = v end)
+createSlider(pVisuals, "radar size", 100, 300, function() return Cfg.RadarSize end, function(v) Cfg.RadarSize = v end)
+
+addSection(pVisuals, "viewport esp")
+createToggle(pVisuals, "enable viewport esp", function() return Cfg.ViewportESP end, function(v) Cfg.ViewportESP = v end)
+createColorPicker(pVisuals, "viewport color", function() return Cfg.ViewportColor end, function(v) Cfg.ViewportColor = v end)
 
 addSection(pVisuals, "out of fov arrows")
 createToggle(pVisuals, "enable oof arrows", function() return Cfg.OOFArrowsEnabled end, function(v) Cfg.OOFArrowsEnabled = v end)
@@ -529,6 +601,14 @@ createKeybind(pMisc, "aimbot key (repeat)", function() return Cfg.Key_Aimbot end
 createButton(pMisc, "Save Config", function() SaveConfig() end)
 createButton(pMisc, "Load Config", function() LoadConfig() end)
 
+addSection(pMisc, "ui")
+createToggle(pMisc, "watermark", function() return Cfg.WatermarkEnabled end, function(v) 
+    Cfg.WatermarkEnabled = v 
+    if State.WatermarkFrame then
+        State.WatermarkFrame.Visible = v
+    end
+end)
+
 local chatScroll = new("ScrollingFrame", { Parent = pAI, Size = UDim2.new(1, 0, 1, -40), BackgroundColor3 = Color3.fromRGB(10, 10, 10), BorderSizePixel = 0, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 2, ZIndex = 15 })
 new("UICorner", { CornerRadius = UDim.new(0, CORNER), Parent = chatScroll })
 new("UIStroke", { Color = Color3.fromRGB(30, 30, 30), Thickness = 1, Parent = chatScroll })
@@ -600,7 +680,7 @@ end)
 
 local Drawings = State.Drawings
 local function newBundle()
-    return { box = Drawing.new("Square"), name = Drawing.new("Text"), dist = Drawing.new("Text"), healthBar = Drawing.new("Line"), healthBg = Drawing.new("Line"), tracer = Drawing.new("Line"), skelLines = {} }
+    return { box = Drawing.new("Square"), name = Drawing.new("Text"), dist = Drawing.new("Text"), healthBar = Drawing.new("Line"), healthBg = Drawing.new("Line"), tracer = Drawing.new("Line"), skelLines = {}, box3d = {} }
 end
 local function hideBundle(d)
     for _, o in pairs(d) do
@@ -633,6 +713,12 @@ local Bones = {
     {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}
 }
 
+local Box3DEdges = {
+    {1,2},{2,3},{3,4},{4,1},
+    {5,6},{6,7},{7,8},{8,5},
+    {1,5},{2,6},{3,7},{4,8}
+}
+
 local CrosshairAngle = 0
 
 local function getOOFArrow(idx)
@@ -656,6 +742,263 @@ local function hideOOFArrow(a)
     a.line2.Visible = false
     a.line1o.Visible = false
     a.line2o.Visible = false
+end
+
+local function getBox3DLines(plr)
+    if not State.Box3DLines[plr] then
+        State.Box3DLines[plr] = {}
+        for i = 1, 12 do
+            State.Box3DLines[plr][i] = Drawing.new("Line")
+        end
+    end
+    return State.Box3DLines[plr]
+end
+
+local function getViewportBox(plr)
+    if not State.ViewportBoxes[plr] then
+        State.ViewportBoxes[plr] = {
+            line = Drawing.new("Line"),
+            circle = Drawing.new("Circle")
+        }
+    end
+    return State.ViewportBoxes[plr]
+end
+
+local RadarFrame = new("Frame", {
+    Parent = overlayGui,
+    Size = UDim2.fromOffset(Cfg.RadarSize, Cfg.RadarSize),
+    Position = UDim2.fromOffset(Cfg.RadarX, Cfg.RadarY),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+    BackgroundTransparency = 0.5,
+    BorderSizePixel = 0,
+    Visible = Cfg.RadarEnabled,
+    ZIndex = 50
+})
+new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = RadarFrame })
+new("UIStroke", { Color = Color3.fromRGB(50, 50, 50), Thickness = 1, Parent = RadarFrame })
+State.RadarFrame = RadarFrame
+
+local PlayerListFrame = new("Frame", {
+    Parent = overlayGui,
+    Size = UDim2.fromOffset(180, 10),
+    Position = UDim2.fromOffset(Cfg.PlayerListX, Cfg.PlayerListY),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+    BackgroundTransparency = 0.5,
+    BorderSizePixel = 0,
+    Visible = Cfg.PlayerList,
+    ZIndex = 50,
+    AutomaticSize = Enum.AutomaticSize.Y
+})
+new("UICorner", { CornerRadius = UDim.new(0, 4), Parent = PlayerListFrame })
+new("UIStroke", { Color = Color3.fromRGB(50, 50, 50), Thickness = 1, Parent = PlayerListFrame })
+new("UIPadding", { PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), Parent = PlayerListFrame })
+State.PlayerListFrame = PlayerListFrame
+
+local SpectatorListFrame = new("Frame", {
+    Parent = overlayGui,
+    Size = UDim2.fromOffset(180, 10),
+    Position = UDim2.fromOffset(Cfg.PlayerListX, Cfg.PlayerListY + 200),
+    BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+    BackgroundTransparency = 0.5,
+    BorderSizePixel = 0,
+    Visible = Cfg.SpectatorList,
+    ZIndex = 50,
+    AutomaticSize = Enum.AutomaticSize.Y
+})
+new("UICorner", { CornerRadius = UDim.new(0, 4), Parent = SpectatorListFrame })
+new("UIStroke", { Color = Color3.fromRGB(50, 50, 50), Thickness = 1, Parent = SpectatorListFrame })
+new("UIPadding", { PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 5), Parent = SpectatorListFrame })
+State.SpectatorListFrame = SpectatorListFrame
+
+local function createHitMarker()
+    local marker = {
+        lines = {},
+        time = tick()
+    }
+    for i = 1, 4 do
+        marker.lines[i] = Drawing.new("Line")
+    end
+    table.insert(State.HitMarkers, marker)
+    if Cfg.HitMarkerSound then
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://131961136"
+        sound.Volume = 0.5
+        sound.Parent = SoundService
+        sound:Play()
+        game:GetService("Debris"):AddItem(sound, 1)
+    end
+end
+
+local function updateHitMarkers()
+    local cam = Workspace.CurrentCamera
+    local cx, cy = cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2
+    for i = #State.HitMarkers, 1, -1 do
+        local m = State.HitMarkers[i]
+        local elapsed = tick() - m.time
+        if elapsed > 0.3 then
+            for _, l in ipairs(m.lines) do l:Remove() end
+            table.remove(State.HitMarkers, i)
+        else
+            local alpha = 1 - (elapsed / 0.3)
+            local size = 8
+            local gap = 4
+            for j = 1, 4 do
+                local angle = math.rad((j - 1) * 90 + 45)
+                local l = m.lines[j]
+                l.Visible = true
+                l.From = Vector2.new(cx + math.cos(angle) * gap, cy + math.sin(angle) * gap)
+                l.To = Vector2.new(cx + math.cos(angle) * (gap + size), cy + math.sin(angle) * (gap + size))
+                l.Color = Cfg.HitMarkerColor
+                l.Thickness = 2
+                l.Transparency = alpha
+            end
+        end
+    end
+end
+
+local function addDamageText(amount, pos)
+    local text = Drawing.new("Text")
+    text.Text = "-" .. tostring(math.floor(amount))
+    text.Size = 14
+    text.Center = true
+    text.Outline = true
+    text.Color = Cfg.DamageColor
+    text.OutlineColor = Color3.new(0, 0, 0)
+    text.Transparency = 1
+    text.Position = pos
+    table.insert(State.DamageTexts, { text = text, time = tick(), startPos = pos })
+end
+
+local function updateDamageTexts()
+    local cam = Workspace.CurrentCamera
+    for i = #State.DamageTexts, 1, -1 do
+        local dt = State.DamageTexts[i]
+        local elapsed = tick() - dt.time
+        if elapsed > 1 then
+            dt.text:Remove()
+            table.remove(State.DamageTexts, i)
+        else
+            dt.text.Position = dt.startPos - Vector2.new(0, elapsed * 40)
+            dt.text.Transparency = 1 - elapsed
+        end
+    end
+end
+
+local function updateRadar()
+    if not Cfg.RadarEnabled then
+        RadarFrame.Visible = false
+        for _, dot in pairs(State.RadarDots) do dot.Visible = false end
+        return
+    end
+    RadarFrame.Visible = true
+    RadarFrame.Size = UDim2.fromOffset(Cfg.RadarSize, Cfg.RadarSize)
+    local myHRP = GetHRP()
+    if not myHRP then return end
+    local myPos = myHRP.Position
+    local myLook = myHRP.CFrame.LookVector
+    local radius = Cfg.RadarSize / 2
+    local center = Vector2.new(radius, radius)
+    local scale = radius / 100
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LP then continue end
+        local hrp = GetHRP(plr)
+        if not hrp then continue end
+        if not State.RadarDots[plr] then
+            local dot = new("Frame", { Parent = RadarFrame, Size = UDim2.fromOffset(4, 4), BackgroundColor3 = Theme.Red, BorderSizePixel = 0, ZIndex = 51 })
+            new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = dot })
+            State.RadarDots[plr] = dot
+        end
+        local rel = hrp.Position - myPos
+        local right = myLook:Cross(Vector3.new(0, 1, 0)).Unit
+        local forward = myLook
+        local x = rel:Dot(right)
+        local z = rel:Dot(forward)
+        local screenX = center.X + x * scale
+        local screenY = center.Y - z * scale
+        if (Vector2.new(screenX, screenY) - center).Magnitude < radius then
+            State.RadarDots[plr].Visible = true
+            State.RadarDots[plr].Position = UDim2.fromOffset(screenX - 2, screenY - 2)
+            local hum = GetHum(plr)
+            if hum then
+                local hp = hum.Health / math.max(hum.MaxHealth, 1)
+                State.RadarDots[plr].BackgroundColor3 = Color3.fromRGB(255, 255 * hp, 255 * hp)
+            end
+        else
+            State.RadarDots[plr].Visible = false
+        end
+    end
+end
+
+local function updatePlayerList()
+    if not Cfg.PlayerList then
+        PlayerListFrame.Visible = false
+        return
+    end
+    PlayerListFrame.Visible = true
+    for _, child in ipairs(PlayerListFrame:GetChildren()) do
+        if child:IsA("TextLabel") then child:Destroy() end
+    end
+    local y = 0
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LP then continue end
+        local hum = GetHum(plr)
+        local hrp = GetHRP(plr)
+        if hum and hrp then
+            local dist = math.floor((Camera.CFrame.Position - hrp.Position).Magnitude)
+            local label = new("TextLabel", {
+                Parent = PlayerListFrame,
+                Size = UDim2.new(1, -10, 0, 14),
+                Position = UDim2.fromOffset(5, y),
+                BackgroundTransparency = 1,
+                Text = string.format("%s [%d] %dHP", plr.Name, dist, math.floor(hum.Health)),
+                TextColor3 = hum.Health > 0 and Theme.Text or Theme.DimText,
+                Font = Enum.Font.Gotham,
+                TextSize = 11,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 51
+            })
+            y += 14
+        end
+    end
+end
+
+local function updateSpectatorList()
+    if not Cfg.SpectatorList then
+        SpectatorListFrame.Visible = false
+        return
+    end
+    SpectatorListFrame.Visible = true
+    for _, child in ipairs(SpectatorListFrame:GetChildren()) do
+        if child:IsA("TextLabel") then child:Destroy() end
+    end
+    local myHead = GetHead()
+    if not myHead then return end
+    local myPos = myHead.Position
+    local y = 0
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LP then continue end
+        local char = plr.Character
+        if not char then continue end
+        local head = char:FindFirstChild("Head")
+        if not head then continue end
+        local dir = (myPos - head.Position).Unit
+        local look = head.CFrame.LookVector
+        if dir:Dot(look) > 0.7 then
+            new("TextLabel", {
+                Parent = SpectatorListFrame,
+                Size = UDim2.new(1, -10, 0, 14),
+                Position = UDim2.fromOffset(5, y),
+                BackgroundTransparency = 1,
+                Text = plr.Name,
+                TextColor3 = Theme.Red,
+                Font = Enum.Font.Gotham,
+                TextSize = 11,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 51
+            })
+            y += 14
+        end
+    end
 end
 
 RunService.RenderStepped:Connect(function(dt)
@@ -756,13 +1099,22 @@ RunService.RenderStepped:Connect(function(dt)
         end
     end
 
+    updateHitMarkers()
+    updateDamageTexts()
+    updateRadar()
+    updatePlayerList()
+    updateSpectatorList()
+
     if not Cfg.ESPEnabled then
         for _, d in pairs(Drawings) do hideBundle(d) end
         for _, a in pairs(State.OOFArrows) do hideOOFArrow(a) end
+        for _, lines in pairs(State.Box3DLines) do for _, l in pairs(lines) do l.Visible = false end end
+        for _, vb in pairs(State.ViewportBoxes) do vb.line.Visible = false vb.circle.Visible = false end
         return
     end
 
     local arrowIdx = 0
+    local chamsHue = (tick() * 0.2) % 1
 
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr == LP then continue end
@@ -785,6 +1137,20 @@ RunService.RenderStepped:Connect(function(dt)
 
         local topPos, topOn = cam:WorldToViewportPoint(topWorld)
         local botPos, botOn = cam:WorldToViewportPoint(bottomWorld)
+
+        -- Проверка на FOV. Если за пределами FOV — скрываем всё (бокс, имя и т.д.)
+        local distToCenter = (Vector2.new(topPos.X, topPos.Y) - Vector2.new(centerX, centerY)).Magnitude
+        if distToCenter > Cfg.AimFOV then
+            hideBundle(d)
+            if State.Box3DLines[plr] then
+                for _, l in ipairs(State.Box3DLines[plr]) do l.Visible = false end
+            end
+            if State.ViewportBoxes[plr] then
+                State.ViewportBoxes[plr].circle.Visible = false
+                State.ViewportBoxes[plr].line.Visible = false
+            end
+            continue
+        end
 
         if not (topOn and botOn) or topPos.Z <= 0 or botPos.Z <= 0 then
             hideBundle(d)
@@ -851,6 +1217,7 @@ RunService.RenderStepped:Connect(function(dt)
         d.box.Filled = false
         d.box.Transparency = 1
 
+        -- Имя над 3D боксом
         d.name.Visible = Cfg.ESPName
         d.name.Text = plr.Name
         d.name.Position = Vector2.new(topPos.X, topY - 18)
@@ -861,8 +1228,9 @@ RunService.RenderStepped:Connect(function(dt)
         d.name.OutlineColor = Color3.fromRGB(0, 0, 0)
         d.name.Transparency = 1
 
+        -- Дистанция и HP под 3D боксом
         d.dist.Visible = Cfg.ESPDistance
-        d.dist.Text = string.format("[%d m]", math.floor((cam.CFrame.Position - hrp.Position).Magnitude))
+        d.dist.Text = string.format("[%d m] [%d HP]", math.floor((cam.CFrame.Position - hrp.Position).Magnitude), math.floor(hum.Health))
         d.dist.Position = Vector2.new(topPos.X, topY + h + 2)
         d.dist.Size = 12
         d.dist.Center = true
@@ -908,23 +1276,93 @@ RunService.RenderStepped:Connect(function(dt)
                     local s1, o1 = cam:WorldToViewportPoint(p1.Position)
                     local s2, o2 = cam:WorldToViewportPoint(p2.Position)
                     if o1 and o2 and s1.Z > 0 and s2.Z > 0 then
+                        local dist = (cam.CFrame.Position - hrp.Position).Magnitude
+                        local alpha = Cfg.SkeletonFade and math.clamp(1 - dist / 500, 0.2, 1) or 1
                         d.skelLines[i].Visible = true
                         d.skelLines[i].From = Vector2.new(s1.X, s1.Y)
                         d.skelLines[i].To = Vector2.new(s2.X, s2.Y)
                         d.skelLines[i].Color = Cfg.SkeletonColor
-                        d.skelLines[i].Thickness = 1
-                        d.skelLines[i].Transparency = 1
+                        d.skelLines[i].Thickness = Cfg.SkeletonThickness
+                        d.skelLines[i].Transparency = alpha
                     else d.skelLines[i].Visible = false end
                 else d.skelLines[i].Visible = false end
             end
         else for _, line in ipairs(d.skelLines) do line.Visible = false end end
 
+        -- 3D Бокс
+        if Cfg.Box3DEnabled then
+            local lines = getBox3DLines(plr)
+            local halfSize = Vector3.new(1.5, 3, 1.5)
+            local cf = hrp.CFrame
+            local corners = {}
+            for i = 1, 8 do
+                local x = (i == 1 or i == 4 or i == 5 or i == 8) and -halfSize.X or halfSize.X
+                local y = (i <= 4) and halfSize.Y or -halfSize.Y
+                local z = (i == 1 or i == 2 or i == 5 or i == 6) and -halfSize.Z or halfSize.Z
+                local worldPos = (cf * CFrame.new(x, y, z)).Position
+                local screenPos, onScreen = cam:WorldToViewportPoint(worldPos)
+                corners[i] = {pos = Vector2.new(screenPos.X, screenPos.Y), on = onScreen and screenPos.Z > 0}
+            end
+            for i, edge in ipairs(Box3DEdges) do
+                local c1, c2 = corners[edge[1]], corners[edge[2]]
+                local l = lines[i]
+                if c1.on and c2.on then
+                    l.Visible = true
+                    l.From = c1.pos
+                    l.To = c2.pos
+                    l.Color = Cfg.Box3DColor
+                    l.Thickness = Cfg.Box3DThickness
+                    l.Transparency = 1
+                else
+                    l.Visible = false
+                end
+            end
+        else
+            if State.Box3DLines[plr] then
+                for _, l in ipairs(State.Box3DLines[plr]) do l.Visible = false end
+            end
+        end
+
+        if Cfg.ViewportESP then
+            local vb = getViewportBox(plr)
+            local headPos, headOn = cam:WorldToViewportPoint(head.Position)
+            if headOn and headPos.Z > 0 then
+                local dist = (cam.CFrame.Position - head.Position).Magnitude
+                local size = math.clamp(1000 / dist, 5, 50)
+                vb.circle.Visible = true
+                vb.circle.Position = Vector2.new(headPos.X, headPos.Y)
+                vb.circle.Radius = size
+                vb.circle.Color = Cfg.ViewportColor
+                vb.circle.Thickness = 1
+                vb.circle.Transparency = 0.5
+                vb.circle.NumSides = 20
+                vb.line.Visible = false
+            else
+                vb.circle.Visible = false
+                vb.line.Visible = false
+            end
+        else
+            if State.ViewportBoxes[plr] then
+                State.ViewportBoxes[plr].circle.Visible = false
+                State.ViewportBoxes[plr].line.Visible = false
+            end
+        end
+
         if Cfg.ChamsEnabled then
             local hl = char:FindFirstChild("NeverCrackChams") or new("Highlight", { Name = "NeverCrackChams", Parent = char })
             hl.Adornee = char
-            hl.FillColor = Cfg.ChamsColor
-            hl.OutlineColor = Cfg.ChamsColor
-            hl.FillTransparency = Cfg.ChamsTransparency
+            local chamsColor = Cfg.ChamsColor
+            local chamsTransparency = Cfg.ChamsTransparency
+            if Cfg.ChamsRainbow then
+                chamsColor = Color3.fromHSV(chamsHue, 1, 1)
+            end
+            if Cfg.ChamsPulse then
+                State.ChamsPulse += 0.05
+                chamsTransparency = math.sin(State.ChamsPulse) * 0.2 + 0.5
+            end
+            hl.FillColor = chamsColor
+            hl.OutlineColor = chamsColor
+            hl.FillTransparency = chamsTransparency
             hl.OutlineTransparency = 1
             hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         else
@@ -963,7 +1401,22 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
-Players.PlayerRemoving:Connect(destroyBundle)
+Players.PlayerRemoving:Connect(function(plr)
+    destroyBundle(plr)
+    if State.Box3DLines[plr] then
+        for _, l in ipairs(State.Box3DLines[plr]) do l:Remove() end
+        State.Box3DLines[plr] = nil
+    end
+    if State.ViewportBoxes[plr] then
+        State.ViewportBoxes[plr].line:Remove()
+        State.ViewportBoxes[plr].circle:Remove()
+        State.ViewportBoxes[plr] = nil
+    end
+    if State.RadarDots[plr] then
+        State.RadarDots[plr]:Destroy()
+        State.RadarDots[plr] = nil
+    end
+end)
 
 task.spawn(function()
     while getgenv().NEVERCRACK_LOADED do
@@ -972,10 +1425,14 @@ task.spawn(function()
             if not State.SelfHL then
                 State.SelfHL = new("Highlight", { Parent = gui, Adornee = LP.Character, FillColor = Cfg.ChamsColor, OutlineColor = Cfg.ChamsColor, DepthMode = Enum.HighlightDepthMode.AlwaysOnTop })
             end
-            State.SelfHL.FillColor = Cfg.ChamsColor
-            State.SelfHL.OutlineColor = Cfg.ChamsColor
+            local chamsColor = Cfg.ChamsColor
+            if Cfg.ChamsRainbow then
+                chamsColor = Color3.fromHSV((tick() * 0.2) % 1, 1, 1)
+            end
+            State.SelfHL.FillColor = chamsColor
+            State.SelfHL.OutlineColor = chamsColor
             State.ChamsPulse += 0.05
-            local pulse = math.sin(State.ChamsPulse) * 0.1 + 0.6
+            local pulse = Cfg.ChamsPulse and (math.sin(State.ChamsPulse) * 0.1 + 0.6) or 0.6
             State.SelfHL.FillTransparency = pulse
             State.SelfHL.OutlineTransparency = 0
         elseif State.SelfHL then
@@ -1000,6 +1457,39 @@ task.spawn(function()
                 new("Weld", { Part0 = head, Part1 = State.HaloPart, C0 = CFrame.new(0, 1.5, 0), Parent = State.HaloPart })
             elseif not Cfg.Halo and State.HaloPart then
                 State.HaloPart:Destroy() State.HaloPart = nil
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while getgenv().NEVERCRACK_LOADED do
+        task.wait(0.1)
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr == LP then continue end
+            local char = plr.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if not hum then continue end
+            local lastHealth = State.Drawings[plr] and State.Drawings[plr].lastHealth
+            if lastHealth and hum.Health < lastHealth then
+                local damage = lastHealth - hum.Health
+                if Cfg.DamageIndicator then
+                    local head = char:FindFirstChild("Head")
+                    if head then
+                        local screenPos, on = Camera:WorldToViewportPoint(head.Position)
+                        if on then
+                            addDamageText(damage, Vector2.new(screenPos.X, screenPos.Y))
+                        end
+                    end
+                end
+                if Cfg.HitMarker then
+                    createHitMarker()
+                end
+            end
+            if State.Drawings[plr] then
+                State.Drawings[plr].lastHealth = hum.Health
+            else
+                State.Drawings[plr] = { lastHealth = hum.Health }
             end
         end
     end
@@ -1253,8 +1743,10 @@ local WM = new("Frame", {
     BackgroundTransparency = 0.15,
     BorderSizePixel = 0,
     ZIndex = 100,
-    AutomaticSize = Enum.AutomaticSize.X
+    AutomaticSize = Enum.AutomaticSize.X,
+    Visible = Cfg.WatermarkEnabled
 })
+State.WatermarkFrame = WM
 new("UICorner", { CornerRadius = UDim.new(1, 0), Parent = WM })
 new("UIStroke", { Color = Color3.fromRGB(50, 50, 50), Thickness = 1, Parent = WM })
 new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), Parent = WM })
@@ -1293,4 +1785,264 @@ task.spawn(function()
         WMLabel.Text = string.format("nevercrack | %d FPS | %d ms | %d spd | %s", State.FPS, State.Ping, vel, timeStr)
         task.wait(0.5)
     end
+end)
+
+local Hitmarkers = {}
+local HitmarkerLines = {}
+
+local function CreateHitmarker()
+    local lines = {}
+    for i = 1, 4 do
+        local line = Drawing.new("Line")
+        line.Color = Color3.fromRGB(255, 255, 255)
+        line.Thickness = 1.5
+        line.Visible = true
+        table.insert(lines, line)
+    end
+    table.insert(Hitmarkers, {lines = lines, time = tick()})
+end
+
+
+local function UpdateHitmarkers()
+    local cam = workspace.CurrentCamera
+    local cx, cy = cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2
+    
+    for i = #Hitmarkers, 1, -1 do
+        local hm = Hitmarkers[i]
+        local elapsed = tick() - hm.time
+        local duration = 0.4 -- время жизни крестика
+        
+        if elapsed > duration then
+            for _, l in ipairs(hm.lines) do l:Remove() end
+            table.remove(Hitmarkers, i)
+        else
+            local alpha = 1 - (elapsed / duration)
+            local size = 10 + (elapsed * 30) 
+            local gap = 4
+            
+            for j = 1, 4 do
+                local angle = math.rad((j - 1) * 90 + 45)
+                local l = hm.lines[j]
+                l.From = Vector2.new(cx + math.cos(angle) * gap, cy + math.sin(angle) * gap)
+                l.To = Vector2.new(cx + math.cos(angle) * (gap + size), cy + math.sin(angle) * (gap + size))
+                l.Transparency = alpha
+            end
+        end
+    end
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do
+    if plr ~= LP and plr.Character then
+        local tool = plr.Character:FindFirstChildOfClass("Tool")
+        if tool and Config.WeaponChams then
+            local hl = tool:FindFirstChild("WeaponChams")
+            if not hl then
+                hl = Instance.new("Highlight", tool)
+                hl.Name = "WeaponChams"
+                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                hl.FillTransparency = 0.5
+            end
+            hl.FillColor = Config.WeaponChamsColor
+            hl.OutlineTransparency = 1 -- Убираем аутлайн
+        elseif not Config.WeaponChams and tool then
+            local hl = tool:FindFirstChild("WeaponChams")
+            if hl then hl:Destroy() end
+        end
+    end
+end
+
+local SelfChamsHighlight = nil
+
+
+if Config.SelfChams then
+    if not SelfChamsHighlight or not SelfChamsHighlight.Parent then
+        SelfChamsHighlight = Instance.new("Highlight")
+        SelfChamsHighlight.Name = "SelfChams"
+        SelfChamsHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        SelfChamsHighlight.Parent = LP.Character
+        SelfChamsHighlight.OutlineTransparency = 1
+    end
+    
+    local pulse = (math.sin(tick() * 3) + 1) / 2 -- от 0 до 1
+    local transparency = 0.2 + (pulse * 0.6) -- 0.2 до 0.8
+    SelfChamsHighlight.FillColor = Config.SelfChamsColor
+    SelfChamsHighlight.FillTransparency = transparency
+else
+    if SelfChamsHighlight and SelfChamsHighlight.Parent then
+        SelfChamsHighlight:Destroy()
+        SelfChamsHighlight = nil
+    end
+end
+local OriginalMaterials = {} -- Сохраняем оригинальные материалы, чтобы вернуть назад
+
+local function ToggleGlowChams(character, enable)
+    if not character then return end
+    
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            if enable then
+               
+                if not OriginalMaterials[part] then
+                    OriginalMaterials[part] = { Material = part.Material, Color = part.Color }
+                end
+                
+                
+                part.Material = Enum.Material.Neon
+                part.Color = Config.GlowColor or Color3.fromRGB(255, 0, 255)
+                
+                if not part:FindFirstChild("GlowLight") then
+                    local light = Instance.new("PointLight", part)
+                    light.Name = "GlowLight"
+                    light.Brightness = 2
+                    light.Range = 8
+                    light.Color = Config.GlowColor or Color3.fromRGB(255, 0, 255)
+                    light.Shadows = false
+                end
+            else
+                
+                if OriginalMaterials[part] then
+                    part.Material = OriginalMaterials[part].Material
+                    part.Color = OriginalMaterials[part].Color
+                    OriginalMaterials[part] = nil
+                end
+                local light = part:FindFirstChild("GlowLight")
+                if light then light:Destroy() end
+            end
+        end
+    end
+end
+
+
+task.spawn(function()
+    while task.wait(0.5) do
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LP and plr.Character then
+                ToggleGlowChams(plr.Character, Config.GlowChams)
+            end
+        end
+        
+        if LP.Character then
+            ToggleGlowChams(LP.Character, Config.GlowSelf)
+        end
+    end
+end)
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local Cam = workspace.CurrentCamera
+local lastFlicker = 0
+
+local function GetFlickerTarget()
+    local best, bestDist = nil, Cfg.FlickerFOV
+    local center = Vector2.new(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2)
+    
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character then
+            local part = p.Character:FindFirstChild(Cfg.FlickerPart)
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            if part and hum and hum.Health > 0 then
+                local sp, onScreen = Cam:WorldToViewportPoint(part.Position)
+                if onScreen and sp.Z > 0 then
+                    local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                    if dist < bestDist then
+                        bestDist = dist
+                        best = part
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+RunService.RenderStepped:Connect(function()
+    if not Cfg.FlickerEnabled then return end
+    if not UIS:IsKeyDown(Cfg.FlickerKey) then return end -- Работает только пока зажата кнопка (например E)
+    
+    if tick() - lastFlicker < Cfg.FlickerDelay then return end
+    
+    local target = GetFlickerTarget()
+    if target then
+        lastFlicker = tick()
+        
+       
+        local originalCFrame = Cam.CFrame
+        
+        
+        Cam.CFrame = CFrame.new(Cam.CFrame.Position, target.Position)
+        
+        
+        RunService.RenderStepped:Wait()
+        
+        
+        pcall(function()
+            
+            local VIM = game:GetService("VirtualInputManager")
+            VIM:SendMouseButtonEvent(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2, 0, true, game, 1)
+            task.wait(0.01) 
+            VIM:SendMouseButtonEvent(Cam.ViewportSize.X/2, Cam.ViewportSize.Y/2, 0, false, game, 1)
+        end)
+        
+        
+         Cam.CFrame = originalCFrame
+    end
+end)
+
+local TweenService = game:GetService("TweenService")
+local updateGui = Instance.new("ScreenGui")
+updateGui.Name = "NeverCrack_UpdateLog"
+updateGui.IgnoreGuiInset = true
+updateGui.ResetOnSpawn = false
+updateGui.Parent = (gethui and gethui()) or LP:WaitForChild("PlayerGui")
+
+local logFrame = Instance.new("Frame", updateGui)
+logFrame.Size = UDim2.fromOffset(400, 250)
+logFrame.Position = UDim2.new(0.5, -200, 0.5, -400) 
+logFrame.BackgroundColor3 = Color3.fromRGB(15, 8, 5) 
+logFrame.BorderSizePixel = 0
+logFrame.ZIndex = 1000
+
+Instance.new("UICorner", logFrame).CornerRadius = UDim.new(0, 8)
+local stroke = Instance.new("UIStroke", logFrame)
+stroke.Color = Color3.fromRGB(255, 120, 0) 
+stroke.Thickness = 2
+
+local title = Instance.new("TextLabel", logFrame)
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundColor3 = Color3.fromRGB(25, 12, 8)
+title.Text = "🎃 NEVERCRACK | HALLOWEEN UPDATE 🎃"
+title.TextColor3 = Color3.fromRGB(255, 120, 0)
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 16
+title.ZIndex = 1001
+Instance.new("UICorner", title).CornerRadius = UDim.new(0, 8)
+
+local logText = Instance.new("TextLabel", logFrame)
+logText.Size = UDim2.new(1, -20, 1, -50)
+logText.Position = UDim2.fromOffset(10, 45)
+logText.BackgroundTransparency = 1
+logText.Text = "• ADDED: Flicker (Instant Hit) [E]\n• ADDED: Halloween Theme & Decor\n• ADDED: Emotes (Dance, Spin, Kick)\n• FIXED: ESP rendering (less lag)\n• FIXED: UI now doesn't break on load\n\nEnjoy the spooky season, hackers!"
+logText.TextColor3 = Color3.fromRGB(255, 230, 200)
+logText.Font = Enum.Font.Gotham
+logText.TextSize = 13
+logText.TextXAlignment = Enum.TextXAlignment.Left
+logText.TextYAlignment = Enum.TextYAlignment.Top
+logText.ZIndex = 1001
+
+
+local tweenIn = TweenService:Create(logFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+    Position = UDim2.new(0.5, -200, 0, 50)
+})
+tweenIn:Play()
+
+task.delay(5, function()
+    local tweenOut = TweenService:Create(logFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        Position = UDim2.new(0.5, -200, -300, 0)
+    })
+    tweenOut:Play()
+    tweenOut.Completed:Connect(function()
+        updateGui:Destroy()
+    end)
 end)
